@@ -101,6 +101,93 @@ void print_bytes_per_codepoint(const char *str) {
     printf("\n");
 }
 
+static int utf8_encode(uint32_t cp, char out[4]) {
+    if (cp <= 0x7F) {
+        out[0] = cp;
+        return 1;
+    } else if (cp <= 0x7FF) {
+        out[0] = 0xC0 | (cp >> 6);
+        out[1] = 0x80 | (cp & 0x3F);
+        return 2;
+    } else if (cp <= 0xFFFF) {
+        out[0] = 0xE0 | (cp >> 12);
+        out[1] = 0x80 | ((cp >> 6) & 0x3F);
+        out[2] = 0x80 | (cp & 0x3F);
+        return 3;
+    } else {
+        out[0] = 0xF0 | (cp >> 18);
+        out[1] = 0x80 | ((cp >> 12) & 0x3F);
+        out[2] = 0x80 | ((cp >>  6) & 0x3F);
+        out[3] = 0x80 | (cp & 0x3F);
+        return 4;
+    }
+}
+
+void print_bytes_per_codepoint(const char *str) {
+    printf("Bytes per code point:");
+    for (int i = 0; str[i]; ) {
+        int len = utf8_charlen((unsigned char)str[i]);
+        printf(" %d", len);
+        i += len;
+    }
+    putchar('\n');
+}
+
+void print_substring_first_six(const char *str) {
+    int i = 0, count = 0;
+    while (str[i] && count < 6) {
+        int len = utf8_charlen((unsigned char)str[i]);
+        i += len;
+        count++;
+    }
+    char *buf = malloc(i + 1);
+    memcpy(buf, str, i);
+    buf[i] = '\0';
+    printf("Substring of the first 6 code points: \"%s\"\n", buf);
+    free(buf);
+}
+
+static bool is_animal_emoji(uint32_t cp) {
+    return (cp >= 0x1F400 && cp <= 0x1F43E)
+        || (cp >= 0x1F986 && cp <= 0x1F99A);
+}
+void print_animal_emojis(const char *str) {
+    printf("Animal emojis:");
+    for (int i = 0; str[i]; ) {
+        int len;
+        uint32_t cp = utf8_decode_cp(str + i, &len);
+        if (is_animal_emoji(cp)) {
+            char out[4];
+            int w = utf8_encode_cp(cp, out);
+            fwrite(out, 1, w, stdout);
+            putchar(' ');
+        }
+        i += len;
+    }
+    putchar('\n');
+}
+
+// ─── 9) Next code point (+1) at index 3 ──────────────────────────────────────
+void print_next_codepoint(const char *str, int target_index) {
+    int idx = 0, i = 0;
+    while (str[i] && idx < target_index) {
+        i += utf8_charlen((unsigned char)str[i]);
+        idx++;
+    }
+    printf("Next character of Codepoint at index %d: ", target_index);
+    if (! str[i]) {
+        putchar('\n');
+        return;
+    }
+    int len;
+    uint32_t cp = utf8_decode_cp(str + i, &len);
+    cp += 1;
+    char out[4];
+    int w = utf8_encode_cp(cp, out);
+    fwrite(out, 1, w, stdout);
+    putchar('\n');
+}
+
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
