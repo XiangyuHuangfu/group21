@@ -4,6 +4,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+bool is_ascii(const char *str);
+void uppercase_ascii(char *str);
+int utf8_strlen(const char *str);
+void print_codepoints(const char *str);
+void print_bytes_per_codepoint(const char *str);
+void print_first_6_codepoints(const char *str);
+void print_animal_emojis(const char *str);
+void print_next_codepoint_at_index_3(const char *str);
+int utf8_charlen(unsigned char byte);
+uint32_t utf8_decode_cp(const char *str, int *len);
+int utf8_encode_cp(uint32_t cp, char out[4]);
+bool is_animal_emoji(uint32_t cp);
+
 bool is_ascii(const char *str) {
     for (int i = 0; str[i] != '\0'; i++) {
         if ((unsigned char)str[i] > 127) {
@@ -41,67 +54,49 @@ int utf8_strlen(const char *str) {
     return count;
 }
 
-void print_codepoints(const char *str) {
-    printf("Code points as decimal numbers:");
-    for (int i = 0; str[i] != '\0'; ) {
-        unsigned char byte = (unsigned char)str[i];
-        uint32_t codepoint = 0;
-        int char_len = 0;
-
-        if (byte <= 0x7F) {
-            char_len = 1;
-            codepoint = byte;
-        } else if ((byte & 0xE0) == 0xC0) {
-            char_len = 2;
-            codepoint = byte & 0x1F;
-        } else if ((byte & 0xF0) == 0xE0) {
-            char_len = 3;
-            codepoint = byte & 0x0F;
-        } else if ((byte & 0xF8) == 0xF0) {
-            char_len = 4;
-            codepoint = byte & 0x07;
-        } else {
-            i++;
-            continue;
-        }
-
-        for (int j = 1; j < char_len; j++) {
-            byte = (unsigned char)str[i + j];
-            codepoint = (codepoint << 6) | (byte & 0x3F);
-        }
-
-        printf(" %u", codepoint);
-        i += char_len;
+int utf8_charlen(unsigned char byte) {
+    if (byte <= 0x7F) {
+        return 1;
+    } else if ((byte & 0xE0) == 0xC0) {
+        return 2;
+    } else if ((byte & 0xF0) == 0xE0) {
+        return 3;
+    } else if ((byte & 0xF8) == 0xF0) {
+        return 4;
     }
-    printf("\n");
+    return 1; // Invalid, but treat as single byte
 }
 
-void print_bytes_per_codepoint(const char *str) {
-    printf("Bytes per code point:");
-    for (int i = 0; str[i] != '\0'; ) {
-        unsigned char byte = (unsigned char)str[i];
-        int char_len = 0;
-
-        if (byte <= 0x7F) {
-            char_len = 1;
-        } else if ((byte & 0xE0) == 0xC0) {
-            char_len = 2;
-        } else if ((byte & 0xF0) == 0xE0) {
-            char_len = 3;
-        } else if ((byte & 0xF8) == 0xF0) {
-            char_len = 4;
-        } else {
-            i++;
-            continue;
-        }
-
-        printf(" %d", char_len);
-        i += char_len;
+uint32_t utf8_decode_cp(const char *str, int *len) {
+    unsigned char byte = (unsigned char)str[0];
+    uint32_t codepoint = 0;
+    
+    if (byte <= 0x7F) {
+        *len = 1;
+        return byte;
+    } else if ((byte & 0xE0) == 0xC0) {
+        *len = 2;
+        codepoint = byte & 0x1F;
+    } else if ((byte & 0xF0) == 0xE0) {
+        *len = 3;
+        codepoint = byte & 0x0F;
+    } else if ((byte & 0xF8) == 0xF0) {
+        *len = 4;
+        codepoint = byte & 0x07;
+    } else {
+        *len = 1;
+        return 0xFFFD; // Replacement character
     }
-    printf("\n");
+    
+    for (int i = 1; i < *len; i++) {
+        byte = (unsigned char)str[i];
+        codepoint = (codepoint << 6) | (byte & 0x3F);
+    }
+    
+    return codepoint;
 }
 
-static int utf8_encode(uint32_t cp, char out[4]) {
+int utf8_encode_cp(uint32_t cp, char out[4]) {
     if (cp <= 0x7F) {
         out[0] = cp;
         return 1;
@@ -114,79 +109,94 @@ static int utf8_encode(uint32_t cp, char out[4]) {
         out[1] = 0x80 | ((cp >> 6) & 0x3F);
         out[2] = 0x80 | (cp & 0x3F);
         return 3;
-    } else {
+    } else if (cp <= 0x10FFFF) {
         out[0] = 0xF0 | (cp >> 18);
         out[1] = 0x80 | ((cp >> 12) & 0x3F);
-        out[2] = 0x80 | ((cp >>  6) & 0x3F);
+        out[2] = 0x80 | ((cp >> 6) & 0x3F);
         out[3] = 0x80 | (cp & 0x3F);
         return 4;
     }
+    return 0;
+}
+
+void print_codepoints(const char *str) {
+    printf("Code points as decimal numbers:");
+    for (int i = 0; str[i] != '\0'; ) {
+        int len;
+        uint32_t codepoint = utf8_decode_cp(str + i, &len);
+        printf(" %u", codepoint);
+        i += len;
+    }
+    printf("\n");
 }
 
 void print_bytes_per_codepoint(const char *str) {
     printf("Bytes per code point:");
-    for (int i = 0; str[i]; ) {
+    for (int i = 0; str[i] != '\0'; ) {
         int len = utf8_charlen((unsigned char)str[i]);
         printf(" %d", len);
         i += len;
     }
-    putchar('\n');
+    printf("\n");
 }
 
-void print_substring_first_six(const char *str) {
-    int i = 0, count = 0;
-    while (str[i] && count < 6) {
+void print_first_6_codepoints(const char *str) {
+    printf("Substring of the first 6 code points: \"");
+    int count = 0;
+    for (int i = 0; str[i] != '\0' && count < 6; ) {
         int len = utf8_charlen((unsigned char)str[i]);
+        for (int j = 0; j < len; j++) {
+            putchar(str[i + j]);
+        }
         i += len;
         count++;
     }
-    char *buf = malloc(i + 1);
-    memcpy(buf, str, i);
-    buf[i] = '\0';
-    printf("Substring of the first 6 code points: \"%s\"\n", buf);
-    free(buf);
+    printf("\"\n");
 }
 
-static bool is_animal_emoji(uint32_t cp) {
-    return (cp >= 0x1F400 && cp <= 0x1F43E)
-        || (cp >= 0x1F986 && cp <= 0x1F99A);
+bool is_animal_emoji(uint32_t cp) {
+    return (cp >= 0x1F400 && cp <= 0x1F43F) || 
+           (cp >= 0x1F980 && cp <= 0x1F9AE);
 }
+
 void print_animal_emojis(const char *str) {
     printf("Animal emojis:");
-    for (int i = 0; str[i]; ) {
+    for (int i = 0; str[i] != '\0'; ) {
         int len;
-        uint32_t cp = utf8_decode_cp(str + i, &len);
-        if (is_animal_emoji(cp)) {
-            char out[4];
-            int w = utf8_encode_cp(cp, out);
-            fwrite(out, 1, w, stdout);
+        uint32_t codepoint = utf8_decode_cp(str + i, &len);
+        if (is_animal_emoji(codepoint)) {
+            for (int j = 0; j < len; j++) {
+                putchar(str[i + j]);
+            }
             putchar(' ');
         }
         i += len;
     }
-    putchar('\n');
+    printf("\n");
 }
 
-void print_next_codepoint(const char *str, int target_index) {
-    int idx = 0, i = 0;
-    while (str[i] && idx < target_index) {
-        i += utf8_charlen((unsigned char)str[i]);
-        idx++;
+void print_next_codepoint_at_index_3(const char *str) {
+    int index = 0;
+    for (int i = 0; str[i] != '\0'; ) {
+        int len;
+        uint32_t codepoint = utf8_decode_cp(str + i, &len);
+        
+        if (index == 3) {
+            codepoint++;
+            char out[4];
+            int out_len = utf8_encode_cp(codepoint, out);
+            for (int j = 0; j < out_len; j++) {
+                putchar(out[j]);
+            }
+            printf("\n");
+            return;
+        }
+        
+        i += len;
+        index++;
     }
-    printf("Next character of Codepoint at index %d: ", target_index);
-    if (! str[i]) {
-        putchar('\n');
-        return;
-    }
-    int len;
-    uint32_t cp = utf8_decode_cp(str + i, &len);
-    cp += 1;
-    char out[4];
-    int w = utf8_encode_cp(cp, out);
-    fwrite(out, 1, w, stdout);
-    putchar('\n');
+    printf("(Index out of range)\n");
 }
-
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
