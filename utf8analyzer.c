@@ -167,7 +167,6 @@ void print_animal_emojis(const char *str) {
     putchar('\n');
 }
 
-// ─── 9) Next code point (+1) at index 3 ──────────────────────────────────────
 void print_next_codepoint(const char *str, int target_index) {
     int idx = 0, i = 0;
     while (str[i] && idx < target_index) {
